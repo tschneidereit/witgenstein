@@ -1,0 +1,5 @@
+{
+    "name": "@test/async-result",
+    "version": "0.2.0",
+    "types": "./index.ts"
+}
