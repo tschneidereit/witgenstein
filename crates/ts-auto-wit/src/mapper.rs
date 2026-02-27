@@ -698,44 +698,8 @@ fn map_typed_array(name: &str) -> Option<WitType> {
     }
 }
 
-/// Convert a camelCase or PascalCase identifier to kebab-case.
-pub fn to_kebab_case(s: &str) -> String {
-    let mut result = String::with_capacity(s.len() + 4);
-    let mut chars = s.chars().peekable();
-    let mut prev_was_upper = false;
-    let mut prev_was_separator = false;
-
-    while let Some(c) = chars.next() {
-        if c == '_' || c == '-' {
-            if !result.is_empty() && !prev_was_separator {
-                result.push('-');
-            }
-            prev_was_separator = true;
-            prev_was_upper = false;
-            continue;
-        }
-
-        if c.is_uppercase() {
-            let next_is_lower = chars.peek().is_some_and(|n| n.is_lowercase());
-
-            if !result.is_empty() && !prev_was_separator {
-                // Insert hyphen before: start of a new word
-                if !prev_was_upper || next_is_lower {
-                    result.push('-');
-                }
-            }
-
-            result.push(c.to_lowercase().next().unwrap());
-            prev_was_upper = true;
-        } else {
-            result.push(c);
-            prev_was_upper = false;
-        }
-        prev_was_separator = false;
-    }
-
-    result
-}
+/// Re-export `to_kebab_case` from the shared crate for use throughout this crate.
+pub use wit_common::to_kebab_case;
 
 #[cfg(test)]
 mod tests {

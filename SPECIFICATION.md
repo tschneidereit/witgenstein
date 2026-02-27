@@ -1,4 +1,4 @@
-# ts-auto-wit — Generate WIT from TypeScript
+# ts-auto-wit / rs-auto-wit — Generate WIT from TypeScript or Rust
 
 Using the ComponentizeJS tool, it's possible to generate bindings for WIT interfaces, presented as imports or requiring content to export items.
 
@@ -106,3 +106,99 @@ The following TypeScript types produce errors (no WIT equivalent):
 ## Diagnostics
 
 When the tool encounters an unmappable type, it reports the source location and provides scaffolded fix code showing how to add the appropriate branded type or decorator.
+
+---
+
+# rs-auto-wit — Generate WIT from Rust
+
+`rs-auto-wit` is a companion tool that generates WIT interface definitions from Rust source code. It uses `#[export]` annotations from the `rs-auto-wit-macros` crate to mark which items should be exposed in the WIT interface.
+
+## Usage
+
+```sh
+rs-auto-wit [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
+```
+
+- `-o|--output`: path to the output `.wit` file. If omitted, the generated WIT is printed to stdout.
+- `--package`: WIT package identifier (e.g. `myorg:my-pkg@1.0.0`). If omitted, derived from `Cargo.toml` (crate name and version).
+- `--strict`: error on ambiguous types instead of using defaults.
+- `<input-path>`: crate root directory (must contain `Cargo.toml`). Defaults to CWD.
+
+## Architecture
+
+The tool works in four phases:
+
+### Phase 1: Discovery (`discover.rs`)
+Scans `.rs` source files using `syn` to find items annotated with `#[export]`:
+- `#[export] fn foo()` — standalone exported functions
+- `#[export] impl MyType { ... }` — resource types with constructors, methods, and static functions
+
+Follows `mod` declarations to scan submodules.
+
+### Phase 2: Resolution (`resolve.rs`)
+Invokes `cargo rustdoc --output-format json` (with `RUSTC_BOOTSTRAP=1` to work on stable/beta Rust) on the target crate and parses the rustdoc JSON output using the `rustdoc-types` crate. Resolves full type information for each exported item:
+- Function signatures (parameters, return types, async)
+- Impl blocks (constructor, methods, static functions)
+- Referenced types (structs → records, enums → WIT enums/variants)
+
+### Phase 3: Mapping (`mapper.rs`)
+Converts resolved Rust types to `wit-encoder` types:
+
+| Rust | WIT |
+|---|---|
+| `bool` | `bool` |
+| `u8`, `u16`, `u32`, `u64` | `u8`, `u16`, `u32`, `u64` |
+| `i8`, `i16`, `i32`, `i64` | `s8`, `s16`, `s32`, `s64` |
+| `f32`, `f64` | `f32`, `f64` |
+| `char` | `char` |
+| `String`, `&str` | `string` |
+| `Vec<T>`, `&[T]` | `list<T>` |
+| `Option<T>` | `option<T>` |
+| `Result<T, E>` | `result<T, E>` |
+| `(T1, T2, ...)` | `tuple<T1, T2, ...>` |
+| `Box<T>`, `Arc<T>`, `Rc<T>` | `T` (unwrapped) |
+| `HashMap<K, V>` | `list<tuple<K, V>>` |
+| `HashSet<T>` | `list<T>` |
+| struct with named fields | `record` |
+| C-like enum | `enum` |
+| enum with data variants | `variant` |
+| `#[export] impl Type { ... }` | `resource` |
+
+### Phase 4: Emission (`emit.rs`)
+Assembles mapped types into a complete WIT package using `wit-encoder`:
+- Type definitions and resources go into a `types` interface
+- Standalone functions are exported directly from the world
+- The types interface is exported from the world
+
+### Identifier Convention
+All identifiers are automatically converted from `snake_case` to `kebab-case` for WIT.
+
+## The `#[export]` Macro
+
+The `rs-auto-wit-macros` crate provides the `#[export]` proc-macro attribute. It is an identity transform — it passes through the annotated item unchanged with zero runtime cost. Its sole purpose is to mark items for WIT generation.
+
+```rust
+use rs_auto_wit_macros::export;
+
+#[export]
+pub fn add(a: u32, b: u32) -> u32 {
+    a + b
+}
+
+pub struct Counter { value: u32 }
+
+#[export]
+impl Counter {
+    pub fn new(initial: u32) -> Self { Self { value: initial } }
+    pub fn get(&self) -> u32 { self.value }
+    pub fn increment(&mut self) { self.value += 1; }
+}
+```
+
+## Workspace Structure
+
+The project is organized as a Cargo workspace:
+- `crates/ts-auto-wit/` — TypeScript → WIT tool
+- `crates/rs-auto-wit/` — Rust → WIT tool
+- `crates/rs-auto-wit-macros/` — `#[export]` proc-macro
+- `crates/wit-common/` — shared utilities (e.g. `to_kebab_case`)

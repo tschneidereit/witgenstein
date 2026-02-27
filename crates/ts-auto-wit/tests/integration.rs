@@ -13,9 +13,9 @@ fn project_root() -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    // Built by `cargo test`
+    // In a workspace, binaries are built in the workspace root's target directory.
     let mut path = project_root();
-    path.push("target");
+    path.push("../../target");
     path.push("debug");
     path.push("ts-auto-wit");
     path
