@@ -2,10 +2,10 @@
 
 This workspace provides two CLI tools for automatically generating [WIT](https://component-model.bytecodealliance.org/design/wit.html) (WebAssembly Interface Type) definitions from source code:
 
-- **ts-auto-wit** — Generate WIT from TypeScript
-- **rs-auto-wit** — Generate WIT from Rust
+- **witgenstein-rs** — Generate WIT from Rust, and build WASM components
+- **witgenstein-ts** — Generate WIT from TypeScript
 
-## rs-auto-wit
+## witgenstein-rs
 
 Generate WIT interface definitions from Rust source code by annotating items with `#[export]`.
 
@@ -14,12 +14,12 @@ Generate WIT interface definitions from Rust source code by annotating items wit
 1. Add the macros crate to your project:
    ```toml
    [dependencies]
-   rs-auto-wit-macros = { path = "path/to/rs-auto-wit-macros" }
+   witgenstein-rs-macros = { path = "path/to/witgenstein-rs-macros" }
    ```
 
 2. Annotate your exports:
    ```rust
-   use rs_auto_wit_macros::export;
+   use witgenstein_rs_macros::export;
 
    #[export]
    pub fn add(a: u32, b: u32) -> u32 {
@@ -36,9 +36,14 @@ Generate WIT interface definitions from Rust source code by annotating items wit
    }
    ```
 
-3. Run the tool:
+3. Generate WIT:
    ```sh
-   rs-auto-wit --package myorg:my-crate@1.0.0 path/to/crate
+   witgenstein-rs generate --package myorg:my-crate@1.0.0 path/to/crate
+   ```
+
+   Or build a wasm32-wasip2 component in a single step:
+   ```sh
+   witgenstein-rs build --package myorg:my-crate@1.0.0 path/to/crate
    ```
 
 ### Generated Output
@@ -46,24 +51,27 @@ Generate WIT interface definitions from Rust source code by annotating items wit
 ```wit
 package myorg:my-crate@1.0.0;
 
-interface types {
+interface my-crate {
   resource counter {
     constructor(initial: u32);
     get: func() -> u32;
     increment: func();
   }
+
+  add: func(a: u32, b: u32) -> u32;
 }
 
-world my-crate {
-  export types;
-  export add: func(a: u32, b: u32) -> u32;
+world my-crate-world {
+  export my-crate;
 }
 ```
 
 ### CLI Usage
 
+#### `generate` — Generate WIT
+
 ```sh
-rs-auto-wit [-o|--output path.wit] [--package namespace:name@version] [--strict] [<input-path>]
+witgenstein-rs generate [-o|--output path.wit] [--package namespace:name@version] [--strict] [-v|--verbose] [<input-path>]
 ```
 
 | Flag | Description |
@@ -71,7 +79,25 @@ rs-auto-wit [-o|--output path.wit] [--package namespace:name@version] [--strict]
 | `-o, --output` | Output file path. Defaults to stdout. |
 | `--package` | WIT package ID (e.g. `myorg:my-pkg@1.0.0`). Defaults to crate name/version. |
 | `--strict` | Error on ambiguous types instead of using defaults. |
+| `-v, --verbose` | Enable verbose output (e.g. list discovered exports). |
 | `<input-path>` | Crate root directory (must contain `Cargo.toml`). Defaults to CWD. |
+
+#### `build` — Build a WASM Component
+
+```sh
+witgenstein-rs build [--package namespace:name@version] [--release] [-v|--verbose] [<input-path>]
+```
+
+| Flag | Description |
+|---|---|
+| `--package` | WIT package ID (e.g. `myorg:my-pkg@1.0.0`). Defaults to crate name/version. |
+| `--release` | Build in release mode. |
+| `-v, --verbose` | Enable verbose output (e.g. list discovered exports). |
+| `<input-path>` | Crate root directory (must contain `Cargo.toml` and `src/lib.rs`). Defaults to CWD. |
+
+Discovers `#[export]` annotations, generates WIT, creates a wrapper crate, and compiles a `wasm32-wasip2` component — all in a single invocation. Output is placed at `target/witgenstein/build/wasm32-wasip2/{debug|release}/`.
+
+Requires the `wasm32-wasip2` target: `rustup target add wasm32-wasip2`.
 
 ### Type Mappings
 
@@ -86,7 +112,7 @@ rs-auto-wit [-o|--output path.wit] [--package namespace:name@version] [--strict]
 | `Option<T>` | `option<T>` |
 | `Result<T, E>` | `result<T, E>` |
 | `(T1, T2)` | `tuple<T1, T2>` |
-| struct (named fields) | `record` |
+| struct | `record` |
 | C-like enum | `enum` |
 | enum with data | `variant` |
 | `#[export] impl Type` | `resource` |
@@ -97,14 +123,14 @@ Smart pointers (`Box`, `Arc`, `Rc`) are transparently unwrapped. `HashMap<K,V>` 
 
 - Rust toolchain
 
-## ts-auto-wit
+## witgenstein-ts
 
 Generate WIT from TypeScript source code. See [SPECIFICATION.md](SPECIFICATION.md) for full details.
 
 ### CLI Usage
 
 ```sh
-ts-auto-wit [-o|--output path.wit] [--package namespace:name@version] [--strict] [<input-path>]
+witgenstein-ts [-o|--output path.wit] [--package namespace:name@version] [--strict] [<input-path>]
 ```
 
 Uses branded types and decorators to guide type mappings where TypeScript's type system is ambiguous.
@@ -113,10 +139,10 @@ Uses branded types and decorators to guide type mappings where TypeScript's type
 
 ```
 crates/
-  ts-auto-wit/          # TypeScript → WIT tool
-  rs-auto-wit/          # Rust → WIT tool
-  rs-auto-wit-macros/   # #[export] proc-macro attribute
-  wit-common/           # Shared utilities (e.g. to_kebab_case)
+  witgenstein-ts/          # TypeScript → WIT tool
+  witgenstein-rs/          # Rust → WIT tool
+  witgenstein-rs-macros/   # #[export] proc-macro attribute
+  wit-common/              # Shared utilities (e.g. to_kebab_case, parse_wit_package_id)
 ```
 
 ## Building

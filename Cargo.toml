@@ -1,11 +1,16 @@
 [workspace]
 members = [
-    "crates/ts-auto-wit",
+    "crates/witgenstein-ts",
     "crates/wit-common",
-    "crates/rs-auto-wit",
-    "crates/rs-auto-wit-macros",
+    "crates/witgenstein-rs",
+    "crates/witgenstein-rs-macros",
+    "crates/witgenstein-rs/tests/fixtures/*",
 ]
-exclude = [
-    "crates/rs-auto-wit/tests/fixtures",
-]
+
 resolver = "3"
+
+[workspace.dependencies]
+witgenstein-ts = { path = "crates/witgenstein-ts" }
+wit-common = { path = "crates/wit-common" }
+witgenstein-rs = { path = "crates/witgenstein-rs" }
+witgenstein-rs-macros = { path = "crates/witgenstein-rs-macros" }

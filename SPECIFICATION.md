@@ -1,24 +1,24 @@
-# ts-auto-wit / rs-auto-wit — Generate WIT from TypeScript or Rust
+# witgenstein-ts / witgenstein-rs — Generate WIT from TypeScript or Rust
 
 Using the ComponentizeJS tool, it's possible to generate bindings for WIT interfaces, presented as imports or requiring content to export items.
 
-It's currently not possible to go the other way around: write TypeScript code and generate WIT from it. `ts-auto-wit` changes that: it can read a TypeScript project and generate a WIT file representing the entry module's exported interface as well as the required external imports.
+It's currently not possible to go the other way around: write TypeScript code and generate WIT from it. `witgenstein-ts` changes that: it can read a TypeScript project and generate a WIT file representing the entry module's exported interface as well as the required external imports.
 
 Where the TypeScript types by themselves aren't precise enough, **branded types** and **decorators** can be used to provide the intended mappings:
-- **Branded types** (for functions, type aliases, interfaces): import types like `u32`, `s64` from the `ts-auto-wit` package, or define local branded types matching the pattern `type u32 = number & { __brand: 'u32' }`.
+- **Branded types** (for functions, type aliases, interfaces): import types like `u32`, `s64` from the `witgenstein-ts` package, or define local branded types matching the pattern `type u32 = number & { __brand: 'u32' }`.
 - **Decorators** (for classes): use `@wit.resource`, `@wit.flags` etc. on class declarations.
 
 The tool will print out any missing mappings with scaffolded code that can be added and filled in to make WIT generation succeed.
 
 ## Implementation
 
-`ts-auto-wit` is a Rust CLI tool, built on the OXC set of JS/TS tools, such as https://crates.io/crates/oxc_parser. It's highly efficient by virtue of minimizing allocations, duplication of parsing and other high-effort processes, and using streaming processing wherever possible, e.g. through the use of `oxc_parser`'s visitor pattern support.
+`witgenstein-ts` is a Rust CLI tool, built on the OXC set of JS/TS tools, such as https://crates.io/crates/oxc_parser. It's highly efficient by virtue of minimizing allocations, duplication of parsing and other high-effort processes, and using streaming processing wherever possible, e.g. through the use of `oxc_parser`'s visitor pattern support.
 
 ## Usage
 
-`ts-auto-wit` has a simple CLI interface:
+`witgenstein-ts` has a simple CLI interface:
 ```sh
-ts-auto-wit [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
+witgenstein-ts [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
 ```
 
 - `-o|--output`: path to the output `.wit` file. If omitted, the generated WIT is printed to stdout.
@@ -73,9 +73,9 @@ The tool follows local imports (relative paths like `./foo`, `../bar`) from the 
 | `BigUint64Array` | `list<u64>` |
 
 ### Branded Type Overrides
-Users disambiguate numeric types via branded types, either imported from the `ts-auto-wit` package or defined locally:
+Users disambiguate numeric types via branded types, either imported from the `witgenstein-ts` package or defined locally:
 ```typescript
-import { u32, s16 } from 'ts-auto-wit';
+import { u32, s16 } from 'witgenstein-ts';
 export function process(count: u32): s16 { ... }
 ```
 Or locally:
@@ -109,20 +109,44 @@ When the tool encounters an unmappable type, it reports the source location and 
 
 ---
 
-# rs-auto-wit — Generate WIT from Rust
+# witgenstein-rs — Generate WIT from Rust
 
-`rs-auto-wit` is a companion tool that generates WIT interface definitions from Rust source code. It uses `#[export]` annotations from the `rs-auto-wit-macros` crate to mark which items should be exposed in the WIT interface.
+`witgenstein-rs` is a companion tool that generates WIT interface definitions from Rust source code. It uses `#[export]` annotations from the `witgenstein-rs-macros` crate to mark which items should be exposed in the WIT interface.
 
 ## Usage
 
+`witgenstein-rs` has two subcommands: `generate` for WIT generation, and `build` for compiling a wasm32-wasip2 component.
+
+### `generate` — Generate WIT
+
 ```sh
-rs-auto-wit [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
+witgenstein-rs generate [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
 ```
 
 - `-o|--output`: path to the output `.wit` file. If omitted, the generated WIT is printed to stdout.
 - `--package`: WIT package identifier (e.g. `myorg:my-pkg@1.0.0`). If omitted, derived from `Cargo.toml` (crate name and version).
 - `--strict`: error on ambiguous types instead of using defaults.
 - `<input-path>`: crate root directory (must contain `Cargo.toml`). Defaults to CWD.
+
+### `build` — Build a WASM Component
+
+```sh
+witgenstein-rs build [--package namespace:name@version] [--release] [<input-path>]
+```
+
+- `--package`: WIT package identifier (e.g. `myorg:my-pkg@1.0.0`). If omitted, derived from `Cargo.toml`.
+- `--release`: build in release mode.
+- `<input-path>`: crate root directory (must contain `Cargo.toml` and `src/lib.rs`). Defaults to CWD.
+
+The `build` command is a single self-contained invocation that:
+1. Discovers `#[export]` annotations
+2. Resolves types via rustdoc JSON
+3. Generates the WIT interface
+4. Creates a wrapper crate at `target/witgenstein/component/`
+5. Builds it with `cargo build --target wasm32-wasip2`
+6. Produces a `.wasm` component at `target/witgenstein/build/wasm32-wasip2/{debug|release}/`
+
+**Requirements:** The `wasm32-wasip2` target must be installed (`rustup target add wasm32-wasip2`).
 
 ## Architecture
 
@@ -166,19 +190,49 @@ Converts resolved Rust types to `wit-encoder` types:
 
 ### Phase 4: Emission (`emit.rs`)
 Assembles mapped types into a complete WIT package using `wit-encoder`:
-- Type definitions and resources go into a `types` interface
-- Standalone functions are exported directly from the world
-- The types interface is exported from the world
+- All exports (standalone functions, resources, and type definitions) go into a single interface named after the crate (e.g. `basic-crate` for a crate named `basic-crate`, regardless of the `--package` flag)
+- The world is named `{crate-name}-world` (e.g. `basic-crate-world`) to avoid a naming conflict with the interface
+- The world re-exports the interface
+
+This ensures that when compiled to a component, all exports are namespaced under the user's package identity (e.g. `myorg:my-crate/basic-crate@1.0.0`) rather than appearing as anonymous top-level exports under the synthetic `root:component` package that the component model binary format produces.
 
 ### Identifier Convention
 All identifiers are automatically converted from `snake_case` to `kebab-case` for WIT.
 
-## The `#[export]` Macro
+### Phase 5: Code Generation (`codegen.rs`) — `build` only
+Creates a wrapper crate at `target/witgenstein/component/` that bridges the user's library to a WASM component:
 
-The `rs-auto-wit-macros` crate provides the `#[export]` proc-macro attribute. It is an identity transform — it passes through the annotated item unchanged with zero runtime cost. Its sole purpose is to mark items for WIT generation.
+1. **Cargo.toml**: depends on the user's crate and `wit-bindgen = "0.40"`, with `crate-type = ["cdylib"]` and an empty `[workspace]` to prevent parent-workspace membership.
+2. **wit/world.wit**: the generated WIT from Phase 4.
+3. **src/lib.rs**: uses `wit_bindgen::generate!` to produce guest bindings, then implements the generated `Guest` trait for the interface by delegating to the user's crate. All delegations (standalone functions and resource type associations) are in a single `impl` block for the interface-level `Guest` trait.
+
+#### Interior Mutability for Resources
+WIT resource methods always produce `&self` in the wit-bindgen generated Rust traits, regardless of the original method's mutability. The codegen layer wraps each user resource in a `RefCell` to bridge this:
 
 ```rust
-use rs_auto_wit_macros::export;
+struct CounterWrapper(std::cell::RefCell<user_crate::Counter>);
+
+impl GuestCounter for CounterWrapper {
+    fn new(initial: u32) -> Self {
+        Self(std::cell::RefCell::new(user_crate::Counter::new(initial)))
+    }
+    fn get(&self) -> u32 {
+        user_crate::Counter::get(&*self.0.borrow())
+    }
+    fn increment(&self) {
+        user_crate::Counter::increment(&mut *self.0.borrow_mut())
+    }
+}
+```
+
+The `is_mut_self` field on `ResolvedFunction` (detected via `Type::BorrowedRef { is_mutable }` in rustdoc-types) determines whether `borrow()` or `borrow_mut()` is used.
+
+## The `#[export]` Macro
+
+The `witgenstein-macros` crate provides the `#[export]` proc-macro attribute. It is an identity transform — it passes through the annotated item unchanged with zero runtime cost. Its sole purpose is to mark items for WIT generation.
+
+```rust
+use witgenstein_macros::export;
 
 #[export]
 pub fn add(a: u32, b: u32) -> u32 {
@@ -198,7 +252,7 @@ impl Counter {
 ## Workspace Structure
 
 The project is organized as a Cargo workspace:
-- `crates/ts-auto-wit/` — TypeScript → WIT tool
-- `crates/rs-auto-wit/` — Rust → WIT tool
-- `crates/rs-auto-wit-macros/` — `#[export]` proc-macro
+- `crates/witgenstein-ts/` — TypeScript → WIT tool
+- `crates/witgenstein/` — Rust → WIT tool
+- `crates/witgenstein-macros/` — `#[export]` proc-macro
 - `crates/wit-common/` — shared utilities (e.g. `to_kebab_case`)

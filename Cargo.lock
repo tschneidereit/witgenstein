@@ -116,6 +116,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "basic-crate"
+version = "0.1.0"
+dependencies = [
+ "witgenstein-rs-macros",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -990,31 +997,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rs-auto-wit"
-version = "0.1.0"
-dependencies = [
- "cargo_metadata",
- "clap",
- "miette",
- "rustdoc-types",
- "semver",
- "serde_json",
- "syn",
- "thiserror",
- "wit-common",
- "wit-encoder",
-]
-
-[[package]]
-name = "rs-auto-wit-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1314,24 +1296,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "ts-auto-wit"
-version = "0.1.0"
-dependencies = [
- "clap",
- "miette",
- "oxc_allocator",
- "oxc_ast",
- "oxc_ast_visit",
- "oxc_parser",
- "oxc_resolver",
- "oxc_span",
- "serde",
- "serde_json",
- "thiserror",
- "wit-common",
 ]
 
 [[package]]
@@ -1650,6 +1614,49 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
+]
+
+[[package]]
+name = "witgenstein-rs"
+version = "0.1.0"
+dependencies = [
+ "cargo_metadata",
+ "clap",
+ "miette",
+ "rustdoc-types",
+ "semver",
+ "serde_json",
+ "syn",
+ "thiserror",
+ "wit-common",
+ "wit-encoder",
+]
+
+[[package]]
+name = "witgenstein-rs-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "witgenstein-ts"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "miette",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
+ "oxc_parser",
+ "oxc_resolver",
+ "oxc_span",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "wit-common",
 ]
 
 [[package]]

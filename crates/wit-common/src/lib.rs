@@ -2,8 +2,8 @@
 
 //! Shared utilities for WIT generation tools.
 //!
-//! This crate provides common functions used by both `ts-auto-wit` and
-//! `rs-auto-wit`, such as identifier case conversion and WIT naming validation.
+//! This crate provides common functions used by both `witgenstein-ts` and
+//! `witgenstein`, such as identifier case conversion and WIT naming validation.
 
 /// Convert a camelCase, PascalCase, or snake_case identifier to kebab-case.
 ///
@@ -56,6 +56,35 @@ pub fn to_kebab_case(s: &str) -> String {
     result
 }
 
+/// A parsed WIT package identifier (namespace, name, optional version).
+pub type WitPackageId = (String, String, Option<String>);
+
+/// Parse a WIT package identifier string like `myorg:my-pkg@1.0.0`.
+///
+/// Returns `(namespace, name, optional_version)`.
+///
+/// # Examples
+///
+/// ```
+/// let (ns, name, ver) = wit_common::parse_wit_package_id("myorg:my-pkg@1.0.0").unwrap();
+/// assert_eq!(ns, "myorg");
+/// assert_eq!(name, "my-pkg");
+/// assert_eq!(ver.as_deref(), Some("1.0.0"));
+/// ```
+pub fn parse_wit_package_id(s: &str) -> Result<WitPackageId, String> {
+    let (rest, version) = if let Some((rest, ver)) = s.rsplit_once('@') {
+        (rest, Some(ver.to_string()))
+    } else {
+        (s, None)
+    };
+
+    let (namespace, name) = rest
+        .split_once(':')
+        .ok_or_else(|| format!("invalid WIT package ID: expected 'namespace:name', got '{s}'"))?;
+
+    Ok((namespace.to_string(), name.to_string(), version))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,5 +101,26 @@ mod tests {
         assert_eq!(to_kebab_case("already-kebab"), "already-kebab");
         assert_eq!(to_kebab_case("a"), "a");
         assert_eq!(to_kebab_case(""), "");
+    }
+
+    #[test]
+    fn test_parse_wit_package_id_with_version() {
+        let (ns, name, ver) = parse_wit_package_id("myorg:my-pkg@1.0.0").unwrap();
+        assert_eq!(ns, "myorg");
+        assert_eq!(name, "my-pkg");
+        assert_eq!(ver.as_deref(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn test_parse_wit_package_id_no_version() {
+        let (ns, name, ver) = parse_wit_package_id("myorg:my-pkg").unwrap();
+        assert_eq!(ns, "myorg");
+        assert_eq!(name, "my-pkg");
+        assert_eq!(ver, None);
+    }
+
+    #[test]
+    fn test_parse_wit_package_id_invalid() {
+        assert!(parse_wit_package_id("invalid").is_err());
     }
 }

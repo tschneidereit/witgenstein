@@ -1,9 +1,0 @@
-[package]
-name = "basic-crate"
-version = "0.1.0"
-edition = "2021"
-
-[workspace]
-
-[dependencies]
-rs-auto-wit-macros = { path = "../../../../rs-auto-wit-macros" }
