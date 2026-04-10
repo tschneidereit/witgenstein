@@ -1,4 +1,4 @@
-# auto-wit — Generate WIT from TypeScript or Rust
+# WITGenstein — Automatic Component Interface Generation
 
 This workspace provides two CLI tools for automatically generating [WIT](https://component-model.bytecodealliance.org/design/wit.html) (WebAssembly Interface Type) definitions from source code:
 
