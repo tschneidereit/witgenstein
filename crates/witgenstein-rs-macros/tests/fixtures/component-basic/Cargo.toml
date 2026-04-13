@@ -1,0 +1,12 @@
+[package]
+name = "component-basic"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+witgenstein-rs-macros.workspace = true
+wit-bindgen = "0.55"

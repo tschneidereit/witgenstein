@@ -1,0 +1,17 @@
+[package]
+name = "hashtools"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "A hashing and encoding toolkit demonstrating WIT generation from Rust with WASIp3 streams and futures."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+witgenstein-rs-macros.workspace = true
+wit-common.workspace = true
+wit-bindgen = "0.55"
+
+[dev-dependencies]
+futures-executor = "0.3"

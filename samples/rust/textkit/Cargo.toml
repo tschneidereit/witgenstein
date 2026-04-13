@@ -1,0 +1,13 @@
+[package]
+name = "textkit"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "A text processing toolkit demonstrating WIT generation from Rust."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+witgenstein-rs-macros.workspace = true
+wit-bindgen = "0.55"

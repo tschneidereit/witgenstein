@@ -4,6 +4,84 @@
 //!
 //! This crate provides common functions used by both `witgenstein-ts` and
 //! `witgenstein`, such as identifier case conversion and WIT naming validation.
+//!
+//! It also provides marker types ([`Stream`] and [`Future`]) that map to the
+//! corresponding WASIp3 `stream<T>` and `future<T>` WIT types.  Use these in
+//! your `#[export]`-annotated APIs when you need streaming or one-shot async
+//! value semantics.
+
+use std::marker::PhantomData;
+
+/// Marker type that maps to WIT `stream<T>`.
+///
+/// This is a zero-cost type used only to express the intended WIT mapping in
+/// function signatures.  At runtime it is a ZST that never carries a value.
+///
+/// # Example
+///
+/// ```ignore
+/// use wit_common::Stream;
+/// use witgenstein_rs_macros::export;
+///
+/// #[export]
+/// pub fn hash_stream(data: Vec<u8>) -> Stream<Vec<u8>> {
+///     unreachable!("stub — generated WIT bindings provide the real impl")
+/// }
+/// ```
+pub struct Stream<T> {
+    _marker: PhantomData<T>,
+}
+
+impl<T> Stream<T> {
+    /// Create a `Stream<T>` value.  Only useful in stubs; the real
+    /// implementation is provided by the component runtime.
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> Default for Stream<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Marker type that maps to WIT `future<T>`.
+///
+/// This is a zero-cost type used only to express the intended WIT mapping in
+/// function signatures.  At runtime it is a ZST that never carries a value.
+///
+/// # Example
+///
+/// ```ignore
+/// use wit_common::Future;
+/// use witgenstein_rs_macros::export;
+///
+/// #[export]
+/// pub fn compute_later(input: String) -> Future<u64> {
+///     unreachable!("stub — generated WIT bindings provide the real impl")
+/// }
+/// ```
+pub struct Future<T> {
+    _marker: PhantomData<T>,
+}
+
+impl<T> Future<T> {
+    /// Create a `Future<T>` value.  Only useful in stubs.
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> Default for Future<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Convert a camelCase, PascalCase, or snake_case identifier to kebab-case.
 ///
