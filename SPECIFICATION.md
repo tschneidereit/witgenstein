@@ -1,4 +1,6 @@
-# witgenstein-ts / witgenstein-rs — Generate WIT from TypeScript or Rust
+# witgenstein-ts / witgenstein-rs-macros — Generate WIT from TypeScript or Rust
+
+## witgenstein-ts
 
 Using the ComponentizeJS tool, it's possible to generate bindings for WIT interfaces, presented as imports or requiring content to export items.
 
@@ -10,13 +12,12 @@ Where the TypeScript types by themselves aren't precise enough, **branded types*
 
 The tool will print out any missing mappings with scaffolded code that can be added and filled in to make WIT generation succeed.
 
-## Implementation
+### Implementation
 
 `witgenstein-ts` is a Rust CLI tool, built on the OXC set of JS/TS tools, such as https://crates.io/crates/oxc_parser. It's highly efficient by virtue of minimizing allocations, duplication of parsing and other high-effort processes, and using streaming processing wherever possible, e.g. through the use of `oxc_parser`'s visitor pattern support.
 
-## Usage
+### Usage
 
-`witgenstein-ts` has a simple CLI interface:
 ```sh
 witgenstein-ts [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
 ```
@@ -26,20 +27,20 @@ witgenstein-ts [-o|--output path-to-output.wit] [--package namespace:name@versio
 - `--strict`: error on ambiguous types (e.g. bare `number`) instead of using defaults.
 - `<input-path>`: if omitted, the TS project in the CWD will be used. If a directory, the TS project in that directory will be used. If a file, that file is used as the top-level TS source file.
 
-## Entry Point Resolution
+### Entry Point Resolution
 
 When the input is a directory (or CWD):
 1. Check `package.json` for `main`, `exports`, or `types` fields
 2. Check `tsconfig.json` for `files` or `include`
 3. Fall back to `index.ts` or `src/index.ts`
 
-## Module Following
+### Module Following
 
 The tool follows local imports (relative paths like `./foo`, `../bar`) from the entry file to resolve all type definitions. External imports (bare specifiers) that are used in the public API surface are auto-detected as WIT imports — no explicit annotation needed.
 
-## Type Mappings
+### Type Mappings
 
-### Direct Mappings
+#### Direct Mappings
 | TypeScript | WIT | Notes |
 |---|---|---|
 | `string` | `string` | |
@@ -56,9 +57,11 @@ The tool follows local imports (relative paths like `./foo`, `../bar`) from the 
 | `enum` with `@wit.flags` | `flags` | |
 | discriminated union | `variant` | |
 | `Promise<T>` | `future<T>` | |
+| `AsyncIterable<T>` | `stream<T>` | WASIp3 stream |
+| `ReadableStream<T>` | `stream<T>` | WASIp3 stream |
 | `async function` | `async func` | WASIp3 async |
 
-### Typed Array Mappings
+#### Typed Array Mappings
 | TypeScript | WIT |
 |---|---|
 | `Uint8Array` | `list<u8>` |
@@ -72,7 +75,7 @@ The tool follows local imports (relative paths like `./foo`, `../bar`) from the 
 | `BigInt64Array` | `list<s64>` |
 | `BigUint64Array` | `list<u64>` |
 
-### Branded Type Overrides
+#### Branded Type Overrides
 Users disambiguate numeric types via branded types, either imported from the `witgenstein-ts` package or defined locally:
 ```typescript
 import { u32, s16 } from 'witgenstein-ts';
@@ -84,89 +87,111 @@ type u32 = number & { __brand: 'u32' };
 ```
 Recognized branded names: `u8`, `u16`, `u32`, `u64`, `s8`, `s16`, `s32`, `s64`, `f32`, `f64`, `char`.
 
-### Result Pattern
+#### Result Pattern
 The tool recognizes `Result<T, E>` patterns and maps them to WIT `result<T, E>`. Both branded `Result` types and union patterns like `{ ok: T } | { err: E }` are supported.
 
-### Generics
+#### Generics
 Only built-in generic mappings are supported:
 - `Array<T>` → `list<T>`
 - `Promise<T>` → `future<T>`
+- `AsyncIterable<T>` → `stream<T>`
+- `ReadableStream<T>` → `stream<T>`
 
 User-defined generic types produce an error.
 
-### Identifier Convention
+#### Identifier Convention
 All identifiers are automatically converted from `camelCase` to `kebab-case` for WIT.
 
-### Error Types
+#### Error Types
 The following TypeScript types produce errors (no WIT equivalent):
 - `any`, `unknown`
 - Function types (no first-class functions in WIT)
 - User-defined generic types
 
-## Diagnostics
+### Diagnostics
 
 When the tool encounters an unmappable type, it reports the source location and provides scaffolded fix code showing how to add the appropriate branded type or decorator.
 
 ---
 
-# witgenstein-rs — Generate WIT from Rust
+## witgenstein-rs-macros — Generate WIT Components from Rust via Proc Macro
 
-`witgenstein-rs` is a companion tool that generates WIT interface definitions from Rust source code. It uses `#[export]` annotations from the `witgenstein-rs-macros` crate to mark which items should be exposed in the WIT interface.
+`witgenstein-rs-macros` provides the `component!` proc macro that generates WIT and `wit_bindgen` glue code at compile time. Users wrap their exported items in `component! { ... }` and mark them with `#[export]`, then build with `cargo build --target wasm32-wasip2`.
 
-## Usage
+### Usage
 
-`witgenstein-rs` has two subcommands: `generate` for WIT generation, and `build` for compiling a wasm32-wasip2 component.
+```rust
+witgenstein_rs_macros::component! {
+    #![package("myorg:my-crate@1.0.0")]
+    #![interface("my-api")]
 
-### `generate` — Generate WIT
-
-```sh
-witgenstein-rs generate [-o|--output path-to-output.wit] [--package namespace:name@version] [--strict] [<input-path>]
+    #[export]
+    pub fn add(a: u32, b: u32) -> u32 { a + b }
+}
 ```
 
-- `-o|--output`: path to the output `.wit` file. If omitted, the generated WIT is printed to stdout.
-- `--package`: WIT package identifier (e.g. `myorg:my-pkg@1.0.0`). If omitted, derived from `Cargo.toml` (crate name and version).
-- `--strict`: error on ambiguous types instead of using defaults.
-- `<input-path>`: crate root directory (must contain `Cargo.toml`). Defaults to CWD.
+Types (structs, enums) live **outside** the macro — the macro scans source files
+and discovers them automatically:
 
-### `build` — Build a WASM Component
+```rust
+pub struct Counter { value: u32 }
 
-```sh
-witgenstein-rs build [--package namespace:name@version] [--release] [<input-path>]
+witgenstein_rs_macros::component! {
+    #[export]
+    impl Counter {
+        pub fn new(initial: u32) -> Self { Self { value: initial } }
+        pub fn get(&self) -> u32 { self.value }
+        pub fn increment(&mut self) { self.value += 1; }
+    }
+}
 ```
 
-- `--package`: WIT package identifier (e.g. `myorg:my-pkg@1.0.0`). If omitted, derived from `Cargo.toml`.
-- `--release`: build in release mode.
-- `<input-path>`: crate root directory (must contain `Cargo.toml` and `src/lib.rs`). Defaults to CWD.
+### Configuration
 
-The `build` command is a single self-contained invocation that:
-1. Discovers `#[export]` annotations
-2. Resolves types via rustdoc JSON
-3. Generates the WIT interface
-4. Creates a wrapper crate at `target/witgenstein/component/`
-5. Builds it with `cargo build --target wasm32-wasip2`
-6. Produces a `.wasm` component at `target/witgenstein/build/wasm32-wasip2/{debug|release}/`
+Inner attributes configure the WIT package and interface:
 
-**Requirements:** The `wasm32-wasip2` target must be installed (`rustup target add wasm32-wasip2`).
+- `#![package("ns:name@version")]` — WIT package identity. Default: `component:pkg`.
+- `#![interface("name")]` — WIT interface name. Default: `exports`.
 
-## Architecture
+Both are optional. The world is always named `component-world`.
 
-The tool works in four phases:
+### Architecture
 
-### Phase 1: Discovery (`discover.rs`)
-Scans `.rs` source files using `syn` to find items annotated with `#[export]`:
-- `#[export] fn foo()` — standalone exported functions
-- `#[export] impl MyType { ... }` — resource types with constructors, methods, and static functions
+The macro works in four phases at compile time:
 
-Follows `mod` declarations to scan submodules.
+#### Phase 1: Extraction (`extract.rs`)
+Parses items inside the `component!` body using `syn` to discover:
+- `#[export] fn name(...)` — standalone exported functions
+- `#[export] impl Type { ... }` — resource types with constructors, methods, and static functions
 
-### Phase 2: Resolution (`resolve.rs`)
-Invokes `cargo rustdoc --output-format json` (with `RUSTC_BOOTSTRAP=1` to work on stable/beta Rust) on the target crate and parses the rustdoc JSON output using the `rustdoc-types` crate. Resolves full type information for each exported item:
-- Function signatures (parameters, return types, async)
-- Impl blocks (constructor, methods, static functions)
-- Referenced types (structs → records, enums → WIT enums/variants)
+**Source-scanning type discovery:** Before processing the macro body, the macro reads the crate's source files (via `CARGO_MANIFEST_DIR/src/`) and collects all struct and enum definitions. Types therefore do **not** need to be inside `component!` — they can live anywhere in the crate and are automatically included in the WIT interface when referenced (directly or transitively) by an exported function's signature. Types placed inside the macro still work and take precedence over external definitions of the same name.
 
-### Phase 3: Mapping (`mapper.rs`)
-Converts resolved Rust types to `wit-encoder` types:
+Type resolution is purely AST-based (syn parsing of source files, no I/O beyond reading `.rs` files).
+
+#### Phase 2: WIT Generation (`wit.rs`)
+Generates an inline WIT string from the extracted types:
+- Package declaration from `#![package(...)]` config
+- Single interface from `#![interface(...)]` config
+- All type definitions, resources, and functions in that interface
+- A `component-world` that exports the interface
+
+#### Phase 3: Glue Code Generation (`glue.rs`)
+Generates Rust code that bridges user types to `wit_bindgen`:
+- `wit_bindgen::generate!({ inline: "...", world: "component-world" })` invocation
+- Bidirectional conversion functions between user types and wit-bindgen bindings types
+- `Guest` trait implementation delegating to user functions
+- `GuestResource` trait implementations for resources
+- `RefCell` wrappers for interior mutability (WIT methods always take `&self`)
+
+#### Phase 4: Emission (`lib.rs`)
+Re-emits original items (with `#[export]` stripped) plus the glue wrapped in:
+```rust
+#[cfg(target_arch = "wasm32")]
+mod __witgenstein_glue { ... }
+```
+This ensures native `cargo test` works without `wit_bindgen` runtime dependencies.
+
+### Type Mappings
 
 | Rust | WIT |
 |---|---|
@@ -180,79 +205,45 @@ Converts resolved Rust types to `wit-encoder` types:
 | `Option<T>` | `option<T>` |
 | `Result<T, E>` | `result<T, E>` |
 | `(T1, T2, ...)` | `tuple<T1, T2, ...>` |
-| `Box<T>`, `Arc<T>`, `Rc<T>` | `T` (unwrapped) |
-| `HashMap<K, V>` | `list<tuple<K, V>>` |
-| `HashSet<T>` | `list<T>` |
+| `wit_common::Stream<T>` | `stream<T>` |
+| `wit_common::Future<T>` | `future<T>` |
+| `async fn` | `async func` |
 | struct with named fields | `record` |
 | C-like enum | `enum` |
 | enum with data variants | `variant` |
 | `#[export] impl Type { ... }` | `resource` |
 
-### Phase 4: Emission (`emit.rs`)
-Assembles mapped types into a complete WIT package using `wit-encoder`:
-- All exports (standalone functions, resources, and type definitions) go into a single interface named after the crate (e.g. `basic-crate` for a crate named `basic-crate`, regardless of the `--package` flag)
-- The world is named `{crate-name}-world` (e.g. `basic-crate-world`) to avoid a naming conflict with the interface
-- The world re-exports the interface
+### Named Type Conversions
+wit-bindgen generates its own Rust types for records, enums, and variants in the bindings module (e.g., `bindings::exports::...::Algorithm`). These are distinct from the user types (e.g., `Algorithm`). The macro automatically generates bidirectional conversion functions for every named type that appears in function signatures:
+- **Parameters**: bindings type → user type (before calling user code)
+- **Returns**: user type → bindings type (after receiving the result)
+- Conversions are recursive: a `Result<HashOutput, HashError>` wraps `.map()` and `.map_err()` with nested conversions.
 
-This ensures that when compiled to a component, all exports are namespaced under the user's package identity (e.g. `myorg:my-crate/basic-crate@1.0.0`) rather than appearing as anonymous top-level exports under the synthetic `root:component` package that the component model binary format produces.
+### Async Functions (WASIp3)
+Functions marked `async` produce `async func` in the WIT. The glue generates `async fn` signatures in the `Guest` trait impl and appends `.await` to user function calls. wit-bindgen 0.55+ handles the async ABI lowering automatically.
+
+### Stream Return Types (WASIp3)
+Functions returning `wit_common::Stream<T>` produce `stream<T>` in WIT. The glue creates a stream pair via `wit_stream::new()` and returns the reader half.
+
+### Interior Mutability for Resources
+WIT resource methods always produce `&self` in the wit-bindgen generated Rust traits. The macro wraps each user resource in a `RefCell` to bridge this:
+- `&self` methods use `borrow()`
+- `&mut self` methods use `borrow_mut()`
+
+### The `#[export]` Attribute
+
+The `#[export]` attribute marks items for WIT export. It is consumed by `component!` — on its own it is an identity transform.
+
+Supported targets:
+- `#[export] pub fn name(...)` — standalone functions
+- `#[export] impl Type { ... }` — resources
 
 ### Identifier Convention
 All identifiers are automatically converted from `snake_case` to `kebab-case` for WIT.
 
-### Phase 5: Code Generation (`codegen.rs`) — `build` only
-Creates a wrapper crate at `target/witgenstein/component/` that bridges the user's library to a WASM component:
-
-1. **Cargo.toml**: depends on the user's crate and `wit-bindgen = "0.40"`, with `crate-type = ["cdylib"]` and an empty `[workspace]` to prevent parent-workspace membership.
-2. **wit/world.wit**: the generated WIT from Phase 4.
-3. **src/lib.rs**: uses `wit_bindgen::generate!` to produce guest bindings, then implements the generated `Guest` trait for the interface by delegating to the user's crate. All delegations (standalone functions and resource type associations) are in a single `impl` block for the interface-level `Guest` trait.
-
-#### Interior Mutability for Resources
-WIT resource methods always produce `&self` in the wit-bindgen generated Rust traits, regardless of the original method's mutability. The codegen layer wraps each user resource in a `RefCell` to bridge this:
-
-```rust
-struct CounterWrapper(std::cell::RefCell<user_crate::Counter>);
-
-impl GuestCounter for CounterWrapper {
-    fn new(initial: u32) -> Self {
-        Self(std::cell::RefCell::new(user_crate::Counter::new(initial)))
-    }
-    fn get(&self) -> u32 {
-        user_crate::Counter::get(&*self.0.borrow())
-    }
-    fn increment(&self) {
-        user_crate::Counter::increment(&mut *self.0.borrow_mut())
-    }
-}
-```
-
-The `is_mut_self` field on `ResolvedFunction` (detected via `Type::BorrowedRef { is_mutable }` in rustdoc-types) determines whether `borrow()` or `borrow_mut()` is used.
-
-## The `#[export]` Macro
-
-The `witgenstein-macros` crate provides the `#[export]` proc-macro attribute. It is an identity transform — it passes through the annotated item unchanged with zero runtime cost. Its sole purpose is to mark items for WIT generation.
-
-```rust
-use witgenstein_macros::export;
-
-#[export]
-pub fn add(a: u32, b: u32) -> u32 {
-    a + b
-}
-
-pub struct Counter { value: u32 }
-
-#[export]
-impl Counter {
-    pub fn new(initial: u32) -> Self { Self { value: initial } }
-    pub fn get(&self) -> u32 { self.value }
-    pub fn increment(&mut self) { self.value += 1; }
-}
-```
-
 ## Workspace Structure
 
-The project is organized as a Cargo workspace:
-- `crates/witgenstein-ts/` — TypeScript → WIT tool
-- `crates/witgenstein/` — Rust → WIT tool
-- `crates/witgenstein-macros/` — `#[export]` proc-macro
-- `crates/wit-common/` — shared utilities (e.g. `to_kebab_case`)
+- `crates/witgenstein-ts/` — TypeScript → WIT CLI tool
+- `crates/witgenstein-rs-macros/` — `component!` proc-macro
+- `crates/wit-common/` — shared utilities + `Stream<T>` / `Future<T>` marker types
+- `samples/rust/hashtools/` — sample Rust component

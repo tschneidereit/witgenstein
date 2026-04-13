@@ -2,9 +2,9 @@
 members = [
     "crates/witgenstein-ts",
     "crates/wit-common",
-    "crates/witgenstein-rs",
     "crates/witgenstein-rs-macros",
-    "crates/witgenstein-rs/tests/fixtures/*",
+    "crates/witgenstein-rs-macros/tests/fixtures/*",
+    "samples/rust/*",
 ]
 
 resolver = "3"
@@ -12,5 +12,4 @@ resolver = "3"
 [workspace.dependencies]
 witgenstein-ts = { path = "crates/witgenstein-ts" }
 wit-common = { path = "crates/wit-common" }
-witgenstein-rs = { path = "crates/witgenstein-rs" }
 witgenstein-rs-macros = { path = "crates/witgenstein-rs-macros" }
